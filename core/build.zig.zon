@@ -1,0 +1,10 @@
+.{
+    .name = .ghostty_imac_core,
+    .version = "0.2.0",
+    .fingerprint = 0x28067f83cd4f4a30,
+    .minimum_zig_version = "0.17.0",
+    .paths = .{""},
+    .dependencies = .{
+        .ghostty = .{ .path = "../vendor/ghostty" },
+    },
+}

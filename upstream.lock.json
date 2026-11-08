@@ -1,0 +1,13 @@
+{
+  "repository": "ghostty-org/ghostty",
+  "revision": "0fa3d577a5614150ff8e2c152de5fb9d5c6d2dec",
+  "tag": "vt-1.0.0",
+  "version": "1.4.1-dev",
+  "lib_version": "1.0.0",
+  "zig": "0.17.0",
+  "research_date": "2026-11-08",
+  "source_archive": "ghostty-vt-1.0.0-0fa3d577.tar.gz",
+  "source_archive_sha256": "a315e13ecfbde6ee00ffdc66525bc95e6b9b5e25f54866d75eb69c6df7b8809b",
+  "source_archive_api": "repos/ghostty-org/ghostty/tarball/0fa3d577a5614150ff8e2c152de5fb9d5c6d2dec",
+  "source_archive_url": "https://api.github.com/repos/ghostty-org/ghostty/tarball/0fa3d577a5614150ff8e2c152de5fb9d5c6d2dec"
+}

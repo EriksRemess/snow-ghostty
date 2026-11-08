@@ -1,0 +1,16 @@
+--- a/src/lib/TinyIo.zig
++++ b/src/lib/TinyIo.zig
+@@ -34,7 +34,12 @@
+ /// True if this platform has a real TinyIo implementation. On
+ /// unsupported platforms `io()` still works but every operation fails
+ /// like `std.Io.failing`.
+-pub const supported: bool = switch (builtin.target.os.tag) {
++// Snow Leopard has no openat/preadv/ulock API. The embedder owns PTY I/O
++// and installs a secure-random callback. File-backed graphics are disabled.
++pub const supported: bool = if (builtin.target.os.tag == .macos and
++    builtin.target.os.version_range.semver.min.order(.{ .major = 10, .minor = 7, .patch = 0 }) == .lt)
++    false
++else switch (builtin.target.os.tag) {
+     .wasi, .freestanding, .other, .uefi => false,
+     else => true,
+ };

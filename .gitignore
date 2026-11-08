@@ -1,0 +1,38 @@
+/.research/
+/build/
+/.zig-cache/
+/zig-out/
+/vendor/
+/core/.zig-cache/
+/core/zig-out/
+/core/zig-pkg/
+
+# Machine-specific build settings, toolchains, and private notes.
+/config.mk
+/.local-sdk/
+/.local-toolchain/
+/private/
+/captures/
+/logs/
+.env
+.env.*
+!.env.example
+
+# Generated Python and native build output.
+__pycache__/
+*.py[cod]
+*.o
+*.a
+*.dylib
+*.dSYM/
+*.app/
+*.log
+.DS_Store
+
+# Credentials and certificate private material do not belong in this repo.
+*.key
+*.pem
+*.p12
+*.pfx
+id_rsa
+id_ed25519
