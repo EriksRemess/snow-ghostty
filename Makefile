@@ -11,6 +11,9 @@ CFLAGS ?= -O2 -g
 RAW_CORE = core/zig-out/lib/libghostty-vt-static.a
 CORE = build/libghostty-vt.a
 INCLUDES = -Icore/zig-out/include -Isrc -DGHOSTTY_STATIC
+FRONTEND_SOURCES = src/application.m src/settings.m src/window.m src/session.m src/terminal.m src/renderer.m src/fonts.m src/commands.m src/input.m src/diagnostics.m src/config.m src/desktop.m src/menus.m src/tabs.m src/platform.c
+FRONTEND_HEADERS = $(wildcard src/*.h)
+FRONTEND_LIBS = -lproc -framework Cocoa -framework ApplicationServices -framework OpenGL -framework Carbon
 RESOURCES = $(shell find resources -type f)
 BUNDLE = build/Snow Ghostty.app
 APP_TARGET = build/Snow\ Ghostty.app/Contents/MacOS/snow-ghostty
@@ -22,9 +25,9 @@ check-toolchain:
 	@test -n "$(SDK)" -a -d "$(SDK)/System/Library/Frameworks" || { echo "Set SDK to a MacOSX10.6.sdk directory (see README.md)" >&2; exit 1; }
 	@test -n "$(OSXCROSS_BIN)" -a -x "$(OSXCROSS_BIN)/x86_64-apple-darwin10-ar" -a -x "$(LINKER)" || { echo "Set OSXCROSS_BIN to the OSXCross target/bin directory (see README.md)" >&2; exit 1; }
 
-$(APP_TARGET): src/main.m src/desktop.m src/desktop.h src/config.m src/config.h src/platform.c src/platform.h Info.plist $(CORE) Makefile $(RESOURCES) | check-toolchain
+$(APP_TARGET): src/main.m $(FRONTEND_SOURCES) $(FRONTEND_HEADERS) Info.plist $(CORE) Makefile $(RESOURCES) | check-toolchain
 	@mkdir -p "$(BUNDLE)/Contents/MacOS" "$(BUNDLE)/Contents/Resources"
-	$(CLANG) $(TARGET_FLAGS) $(INCLUDES) -Wall -Wextra $(CFLAGS) --ld-path="$(LINKER)" src/main.m src/config.m src/desktop.m src/platform.c $(CORE) -Wl,-dead_strip -framework Cocoa -framework ApplicationServices -framework OpenGL -o "$@"
+	$(CLANG) $(TARGET_FLAGS) $(INCLUDES) -Wall -Wextra $(CFLAGS) --ld-path="$(LINKER)" src/main.m $(FRONTEND_SOURCES) $(CORE) -Wl,-dead_strip $(FRONTEND_LIBS) -o "$@"
 	cp Info.plist "$(BUNDLE)/Contents/Info.plist"
 	cp vendor/ghostty/LICENSE "$(BUNDLE)/Contents/Resources/Ghostty-LICENSE.txt"
 	cp upstream.lock.json "$(BUNDLE)/Contents/Resources/libghostty-build.json"
@@ -36,7 +39,7 @@ core:
 	cd core && ZIG_GLOBAL_CACHE_DIR="$(abspath .research/zig-cache)" $(ZIG) build -Dtarget=x86_64-macos.10.6 -Dcpu=core2 -Doptimize=ReleaseFast
 	touch $(RAW_CORE)
 
-$(RAW_CORE): core/build.zig core/build.zig.zon upstream.lock.json vendor/ghostty/build.zig vendor/ghostty/src/lib/TinyIo.zig patches/snow-leopard-tinyio.patch
+$(RAW_CORE): core/build.zig core/build.zig.zon upstream.lock.json vendor/ghostty/build.zig vendor/ghostty/src/lib/TinyIo.zig $(wildcard patches/*.patch)
 	$(MAKE) core
 
 $(CORE): $(RAW_CORE) scripts/prepare-archive.py | check-toolchain
@@ -53,3 +56,7 @@ build/gpu-probe: probes/gpu-probe.c Makefile | check-toolchain
 build/lifecycle-probe: probes/lifecycle-probe.m Makefile | check-toolchain
 	@mkdir -p build
 	$(CLANG) $(TARGET_FLAGS) -Wall -Wextra $(CFLAGS) --ld-path="$(LINKER)" $< -framework Cocoa -framework ApplicationServices -framework Carbon -o $@
+
+build/menus-probe: probes/menus-probe.m $(FRONTEND_SOURCES) $(FRONTEND_HEADERS) $(CORE) Makefile | check-toolchain
+	@mkdir -p build
+	$(CLANG) $(TARGET_FLAGS) $(INCLUDES) -Wall -Wextra $(CFLAGS) --ld-path="$(LINKER)" probes/menus-probe.m $(FRONTEND_SOURCES) $(CORE) -Wl,-dead_strip $(FRONTEND_LIBS) -o $@

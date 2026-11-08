@@ -15,7 +15,10 @@ import tempfile
 root = Path(__file__).resolve().parent.parent
 lock = json.loads((root / "upstream.lock.json").read_text())
 vendor = root / "vendor/ghostty"
-patch = root / "patches/snow-leopard-tinyio.patch"
+patches = [root / entry["file"] for entry in lock["patches"]]
+for entry, patch in zip(lock["patches"], patches):
+    if hashlib.sha256(patch.read_bytes()).hexdigest() != entry["sha256"]:
+        raise SystemExit("Local patch checksum mismatch: " + entry["file"])
 cache = root / ".research"
 cache.mkdir(exist_ok=True)
 archive = cache / lock["source_archive"]
@@ -43,17 +46,18 @@ if (vendor / "VERSION").read_text().strip() != lock["version"]:
     raise SystemExit("Existing vendor directory has another version; inspect it before replacing")
 if (vendor / ".snow-ghostty-source-revision").exists() and (vendor / ".snow-ghostty-source-revision").read_text().strip() != lock["revision"]:
     raise SystemExit("Existing vendor directory has another revision; inspect it before replacing")
-with patch.open() as stream:
-    needed = subprocess.run(["patch", "--dry-run", "--forward", "--batch", "-p1"], cwd=vendor, stdin=stream, capture_output=True)
-if needed.returncode == 0:
+for patch in patches:
     with patch.open() as stream:
-        subprocess.run(["patch", "--forward", "--batch", "-p1"], cwd=vendor, stdin=stream, check=True)
-else:
-    # --forward also prevents patch from silently ignoring --reverse and
-    # accepting an unpatched file as though the reverse patch had succeeded.
-    with patch.open() as stream:
-        present = subprocess.run(["patch", "--dry-run", "--reverse", "--forward", "--batch", "-p1"], cwd=vendor, stdin=stream, capture_output=True)
-    if present.returncode:
-        raise SystemExit("Snow Leopard patch neither applies nor is already present")
+        needed = subprocess.run(["patch", "--dry-run", "--forward", "--batch", "--fuzz=0", "-p1"], cwd=vendor, stdin=stream, capture_output=True)
+    if needed.returncode == 0:
+        with patch.open() as stream:
+            subprocess.run(["patch", "--forward", "--batch", "--fuzz=0", "-p1"], cwd=vendor, stdin=stream, check=True)
+    else:
+        # --forward also prevents patch from silently ignoring --reverse and
+        # accepting an unpatched file as though the reverse patch had succeeded.
+        with patch.open() as stream:
+            present = subprocess.run(["patch", "--dry-run", "--reverse", "--forward", "--batch", "--fuzz=0", "-p1"], cwd=vendor, stdin=stream, capture_output=True)
+        if present.returncode:
+            raise SystemExit("Patch neither applies nor is already present: " + patch.name)
 (vendor / ".snow-ghostty-source-revision").write_text(lock["revision"] + "\n")
 print("Ghostty source ready:", lock["revision"])

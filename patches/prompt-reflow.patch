@@ -1,0 +1,285 @@
+diff --git a/src/terminal/PageList.zig b/src/terminal/PageList.zig
+index 0d3cc20fa4c..0ad71e07a15 100644
+--- a/src/terminal/PageList.zig
++++ b/src/terminal/PageList.zig
+@@ -1259,6 +1259,14 @@ pub const Resize = struct {
+     /// rows back and would otherwise get out of sync with us.
+     pull_scrollback: bool = true,
+ 
++    /// Rows that the shell will redraw. During column reflow, copy these
++    /// as blank, hard-ended rows so their old text cannot wrap. The source
++    /// pages remain untouched until the normal reflow replaces them.
++    clear: ?struct {
++        start: *Pin,
++        only_one: bool = false,
++    } = null,
++
+     pub const Cursor = struct {
+         x: size.CellCountInt,
+         y: size.CellCountInt,
+@@ -1491,12 +1499,24 @@ fn resizeCols(
+     // Reflow all our rows.
+     {
+         var reflow_cursor: ReflowCursor = .init(first_rewritten_node);
++        var clear_start = opts.clear;
++        var clearing = false;
+         while (it.next()) |row| {
++            if (clear_start) |clear| {
++                if (row.node == clear.start.node and row.y == clear.start.y) {
++                    clearing = true;
++                    clear_start = null;
++                }
++            }
+             try reflow_cursor.reflowRow(
+                 self,
+                 row,
+                 if (preserved_cursor) |c| c.tracked_pin else null,
++                clearing,
+             );
++            if (opts.clear) |clear| {
++                if (clear.only_one) clearing = false;
++            }
+ 
+             // Once we're done reflowing a page, we're done with it, so
+             // make it available for reuse (or destroy it). Making it
+@@ -1669,15 +1689,22 @@ const ReflowCursor = struct {
+         list: *PageList,
+         row: Pin,
+         cursor_pin: ?*Pin,
++        clear: bool,
+     ) Allocator.Error!void {
+         const src_page: *Page = row.node.page();
+-        const src_row = row.rowAndCell().row;
++        const row_and_cell = row.rowAndCell();
++        var cleared_row: Row = .{ .cells = row_and_cell.row.cells };
++        const src_row = if (clear) row: {
++            cleared_row.semantic_prompt = row_and_cell.row.semantic_prompt;
++            break :row &cleared_row;
++        } else row_and_cell.row;
+         const src_y = row.y;
+-        const cells = src_row.cells.ptr(src_page.memory)[0..src_page.size.cols];
++        const cells = row_and_cell.row.cells.ptr(src_page.memory)[0..src_page.size.cols];
++        const blank: pagepkg.Cell = .{};
+ 
+         // Calculate the columns in this row. First up we trim non-semantic
+         // rightmost blanks.
+-        var cols_len = src_page.size.cols;
++        var cols_len = if (clear) @as(size.CellCountInt, 0) else src_page.size.cols;
+         if (!src_row.wrap) {
+             while (cols_len > 0) {
+                 if (!cells[cols_len - 1].isEmpty()) break;
+@@ -1708,7 +1735,7 @@ const ReflowCursor = struct {
+                 // This row has pins
+                 row_has_pins = true;
+ 
+-                if (cursor_pin != null and p == cursor_pin.?) continue;
++                if (!clear and cursor_pin != null and p == cursor_pin.?) continue;
+ 
+                 // If this pin is in the blanks on the right and past the end
+                 // of the dst col width then we move it to the end of the dst
+@@ -1727,7 +1754,7 @@ const ReflowCursor = struct {
+ 
+         // If the cursor is after blanks on the right, those cells are still
+         // before the next write and must reflow with it.
+-        if (cursor_pin) |p| {
++        if (if (clear) null else cursor_pin) |p| {
+             if (p.node == row.node and p.y == src_y) {
+                 cols_len = @max(cols_len, p.x + 1);
+             }
+@@ -1781,7 +1808,7 @@ const ReflowCursor = struct {
+             // per-cell state machine below for most of the work.
+             // Rows with tracked pins take the slow path so pin
+             // remapping behaves identically.
+-            if (!row_has_pins) {
++            if (!clear and !row_has_pins) {
+                 const max_run = @min(
+                     cols_len - x,
+                     @as(usize, self.page.size.cols) - self.x,
+@@ -1810,7 +1837,7 @@ const ReflowCursor = struct {
+ 
+             if (self.writeCell(
+                 list,
+-                &cells[x],
++                if (clear) &blank else &cells[x],
+                 src_page,
+             )) |result| switch (result) {
+                 // Wrote the cell, move to the next.
+diff --git a/src/terminal/Screen.zig b/src/terminal/Screen.zig
+index c990b55055c..be03c8ee4c9 100644
+--- a/src/terminal/Screen.zig
++++ b/src/terminal/Screen.zig
+@@ -2162,6 +2162,7 @@ pub const Resize = struct {
+ 
+ const resize_tw = tripwire.module(enum {
+     saved_cursor_pin,
++    prompt_pin,
+     pages,
+ }, resize);
+ 
+@@ -2188,6 +2189,18 @@ pub inline fn resize(
+     };
+     defer if (saved_cursor_pin) |p| self.pages.untrackPin(p);
+ 
++    // Locate redrawable text before reflow can split its prompt markers.
++    // Reflow will copy this range as blank rows rather than wrapping text
++    // that the shell is about to replace. Tracking it must not clear any
++    // source cells: a failed resize must preserve the original prompt.
++    const prompt_pin: ?*Pin = prompt: {
++        if (!opts.reflow or opts.cols == self.pages.cols) break :prompt null;
++        const start = self.promptClearStart(opts.prompt_redraw) orelse break :prompt null;
++        try tw.check(.prompt_pin);
++        break :prompt try self.pages.trackPin(start);
++    };
++    defer if (prompt_pin) |p| self.pages.untrackPin(p);
++
+     // A cursor style and hyperlink are partly stored in the page containing
+     // the cursor. Their IDs only have meaning within that page, and the page
+     // keeps reference counts for them. Resizing can replace or destroy the
+@@ -2255,6 +2268,10 @@ pub inline fn resize(
+             .pin = self.cursor.page_pin,
+         },
+         .pull_scrollback = opts.pull_scrollback,
++        .clear = if (prompt_pin) |p| .{
++            .start = p,
++            .only_one = opts.prompt_redraw == .last,
++        } else null,
+     });
+ 
+     // No more failures are possible after this. Enforced by compiler
+@@ -2280,10 +2297,10 @@ pub inline fn resize(
+         self.cursorRight(1);
+     }
+ 
+-    // Clear any redrawable prompt after the fallible resize but before
+-    // restoring the cursor style and hyperlink, so cleared cells retain the
+-    // same default styling they had with the previous ordering.
+-    self.clearPromptForRedraw(opts.prompt_redraw);
++    // Column reflow already emitted blank rows for the redrawable prompt.
++    // For other resizes, clear it now, after the fallible work and before
++    // restoring the cursor style and hyperlink.
++    if (prompt_pin == null) self.clearPromptForRedraw(opts.prompt_redraw);
+ 
+     // Restore the cursor style.
+     self.cursor.style = cursor_style;
+@@ -2376,6 +2393,16 @@ pub inline fn resize(
+     }
+ }
+ 
++fn promptClearStart(
++    self: *Screen,
++    redraw: osc.semantic_prompt.Redraw,
++) ?Pin {
++    if (redraw == .false or self.cursor.semantic_content == .output) return null;
++    if (redraw == .last) return self.cursor.page_pin.*;
++    var it = self.cursor.page_pin.promptIterator(.left_up, null);
++    return it.next();
++}
++
+ fn clearPromptForRedraw(
+     self: *Screen,
+     redraw: osc.semantic_prompt.Redraw,
+@@ -9483,6 +9510,36 @@ test "Screen: resize more cols with cursor at prompt" {
+     }
+ }
+ 
++test "Screen: resize redrawable full-width prompt before reflow" {
++    const alloc = std.testing.allocator;
++    for ([_]usize{ 0, 4 }) |output_rows| {
++        var s = try init(std.testing.io, alloc, .{ .cols = 10, .rows = 6, .max_scrollback_bytes = null });
++        defer s.deinit();
++
++        for (0..output_rows) |_| try s.testWriteString("out\n");
++        for ([_]size.CellCountInt{ 6, 20, 8, 10, 5, 15 }) |cols| {
++            s.cursorSetSemanticContent(.{ .prompt = .initial });
++            for (0..s.pages.cols) |_| try s.testWriteString("-");
++            try s.testWriteString("\n> ");
++            s.cursorSetSemanticContent(.{ .input = .clear_explicit });
++            const cursor_y = s.cursor.y;
++
++            try s.resize(.{ .cols = cols, .rows = 6, .prompt_redraw = .true });
++
++            // The shell moves up one row to redraw its two-line prompt.
++            // Reflowing the old ruler first must not add a row or leave
++            // stale prompt text in either the viewport or scrollback.
++            try std.testing.expectEqual(cursor_y, s.cursor.y);
++            const contents = try s.dumpStringAlloc(alloc, .{ .screen = .{} });
++            defer alloc.free(contents);
++            try std.testing.expect(std.mem.indexOfScalar(u8, contents, '-') == null);
++            try std.testing.expectEqual(output_rows, std.mem.count(u8, contents, "out"));
++            s.cursorUp(1);
++            s.cursorHorizontalAbsolute(0);
++        }
++    }
++}
++
+ test "Screen: resize more cols with cursor not at prompt" {
+     const testing = std.testing;
+     const alloc = testing.allocator;
+@@ -9606,6 +9663,23 @@ test "Screen: resize with prompt_redraw last multiline prompt clears only last l
+     }
+ }
+ 
++test "Screen: resize with prompt_redraw last does not reflow the cleared line" {
++    const alloc = std.testing.allocator;
++    var s = try init(std.testing.io, alloc, .{ .cols = 10, .rows = 4 });
++    defer s.deinit();
++
++    s.cursorSetSemanticContent(.{ .prompt = .initial });
++    try s.testWriteString("first\n");
++    s.cursorSetSemanticContent(.{ .prompt = .continuation });
++    try s.testWriteString("abcdefghij");
++    try s.resize(.{ .cols = 6, .rows = 4, .prompt_redraw = .last });
++
++    const contents = try s.dumpStringAlloc(alloc, .{ .screen = .{} });
++    defer alloc.free(contents);
++    try std.testing.expectEqualStrings("first", contents);
++    try std.testing.expectEqual(1, s.cursor.y);
++}
++
+ test "Screen: select untracked" {
+     const testing = std.testing;
+     const alloc = testing.allocator;
+diff --git a/src/terminal/Terminal.zig b/src/terminal/Terminal.zig
+index a61addc596f..20cfc823361 100644
+--- a/src/terminal/Terminal.zig
++++ b/src/terminal/Terminal.zig
+@@ -17015,6 +17015,39 @@ test "Terminal: softReset palette" {
+     try testing.expectEqual(color.default[200], t.colors.palette.current[200]);
+ }
+ 
++test "Terminal: resize redraws full-width OSC 133 prompt without accumulating rows" {
++    const alloc = testing.allocator;
++    var t = try init(testing.io, alloc, .{ .cols = 20, .rows = 10 });
++    defer t.deinit(alloc);
++    var stream = t.vtStream();
++    defer stream.deinit();
++
++    stream.nextSlice("keep output\r\n");
++    // Powerlevel10k emits the prompt-start mark before its leading blank
++    // line, then prints a full-width ruler and a second line for input.
++    const prompt = struct {
++        fn write(s: *Stream, cols: usize) void {
++            s.nextSlice("\x1b]133;A\x07\r\n\r\n\x1b[A~");
++            for (1..cols) |_| s.nextSlice("─");
++            s.nextSlice("\r\n> \x1b]133;B\x07");
++        }
++    }.write;
++    prompt(&stream, t.cols);
++    for (0..5) |_| {
++        for ([_]size.CellCountInt{ 12, 30, 16, 20 }) |cols| {
++            try t.resize(alloc, .{ .cols = cols, .rows = 10 });
++            // Zsh's redraw uses its previous physical prompt height.
++            stream.nextSlice("\r\x1b[A\x1b[A\x1b[J");
++            prompt(&stream, cols);
++            const contents = try t.plainString(alloc);
++            defer alloc.free(contents);
++            try testing.expectEqual(@as(usize, 1), std.mem.count(u8, contents, "~"));
++            try testing.expectEqual(@as(usize, 1), std.mem.count(u8, contents, "keep output"));
++            try testing.expectEqual(3, t.screens.active.cursor.y);
++        }
++    }
++}
++
+ // https://github.com/mitchellh/ghostty/issues/272
+ // This is also tested in depth in screen resize tests but I want to keep
+ // this test around to ensure we don't regress at multiple layers.

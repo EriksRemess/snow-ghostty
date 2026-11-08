@@ -1,0 +1,16 @@
+--- a/src/terminal/c/terminal.zig
++++ b/src/terminal/c/terminal.zig
+@@ -1050,10 +1050,9 @@
+     );
+     errdefer t.deinit(alloc);
+ 
+-    // libghostty-vt embedders don't necessarily install Ghostty's shell
+-    // integration, so don't assume OSC 133 prompts can be redrawn on resize.
+-    // Shells can still opt in with OSC 133;A;redraw=1.
+-    t.flags.shell_redraws_prompt = .false;
++    // Snow Ghostty is a terminal frontend: use Ghostty's prompt-redraw
++    // default for OSC 133-aware shells. Shells can opt out with redraw=0,
++    // or limit redraw to their last prompt line with redraw=last.
+ 
+     return try wrap(
+         alloc,

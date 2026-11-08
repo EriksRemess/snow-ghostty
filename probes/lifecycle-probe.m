@@ -97,7 +97,7 @@ int main(int argc,char **argv)
     BOOL running=[task isRunning]; window=visibleWindow(pid);
     if (window) capture(window,[prefix stringByAppendingString:@"-after.png"]);
     if (held) ok=ok && running && fullscreen(window);
-    else ok=ok && !running && !window && [task terminationStatus]==0;
+    else ok=ok && running && !window;
     fprintf(stderr,"%s shell exit: %s (process=%s, visible window=%s)\n",argv[2],ok ? "PASS" : "FAIL",
         running ? "running" : "exited",window ? "present" : "none");
     if (running) {

@@ -66,7 +66,24 @@ runtime dylibs or emulated modern syscalls.
 
 The fetcher checks its immutable archive hash and verifies patch state in both
 directions. GNU patch may silently ignore --reverse; --forward prevents that
-from making an unpatched file appear patched.
+from making an unpatched file appear patched. Local patch hashes are pinned in
+`upstream.lock.json`; patches apply with zero context fuzz.
+
+`patches/prompt-reflow.patch` backports [upstream PR #14707](https://github.com/ghostty-org/ghostty/pull/14707)
+at head `1fcc0ce28888878b2acb82fca986e9e4b75c1a2d`. The base remains libghostty-vt
+1.0.0. Redrawable OSC 133 prompt rows are copied as blanks during column reflow,
+before the shell replaces them, so full-width multiline prompts do not grow extra
+rows. The source screen remains intact if resizing fails. The patch includes
+upstream Screen/Terminal regressions; `vt-probe` also exercises twenty alternating
+width changes through the public C API while checking cursor position, prompt
+count and retained command output.
+
+The C library normally disables prompt redraw, unlike Ghostty's terminal
+frontend. `patches/snow-ghostty-prompt-redraw.patch` keeps the core's enabled
+default for this app. It only affects OSC 133-marked prompt/input content;
+unmarked output still reflows normally. Shells retain the standard `redraw=0`
+opt-out and `redraw=last` behavior. Without this frontend policy, the upstream
+fix would remain inactive for ordinary Powerlevel10k prompt marks.
 
 ## Validation
 
@@ -82,7 +99,7 @@ The 1.0.0 update passed on the physical target:
 - Pixel checks for contiguous full blocks, oriented half blocks, and shade
   coverage at both the bundled font's default size and Menlo 18.
 
-Run the native probes described in README. For lifecycle checks:
+Run the native probes described in [HACKING.md](HACKING.md). For lifecycle checks:
 
 ```sh
 ./lifecycle-probe "/path/to/Snow Ghostty.app/Contents/MacOS/snow-ghostty" fullscreen exit-fullscreen
@@ -95,15 +112,90 @@ locally with `--capture PNG`; pass the measured cell dimensions for other fonts.
 
 ## Desktop behavior
 
-The frontend keeps the same PTY across Snow Leopard view-fullscreen transitions.
-In fullscreen, the view's window is temporary: shell exit must terminate the
-application through its delegate, rather than close that temporary window.
+The frontend keeps each tab's PTY across Snow Leopard view-fullscreen
+transitions. The entire tab host enters fullscreen, including the tab strip.
+Its window is temporary: final-tab exit must leave fullscreen through its window
+controller before closing the original window. Exiting another tab removes only
+its session, with deferred child reaping while sibling tabs/windows stay alive.
+
+Snow Leopard lacks the later NSWindow tabbing API. The tab host uses NSTabView
+for content/selection and a compact Cocoa-control strip styled after the target's
+Terminal.app, with left-aligned labels and close buttons. No private APIs or
+Terminal.app artwork are used. The About panel is AppKit's standard native panel;
+the Window, Services and Help menus are registered with NSApplication.
+
+Tab and window titles prefer OSC titles from terminal applications. Without an
+explicit title, the frontend queries its own session's foreground process and
+working directory through Snow Leopard's libproc once per second. Background
+titles update independently; selecting a tab applies its label to the window.
+OSC titles belong to the foreground process that emitted them. A prompt title
+from a shell must not hide a subsequent foreground job such as `top`; the shell
+title becomes eligible again when that job exits.
+The system `top` is setuid and denies libproc metadata queries on 10.6. Fall back
+to the kernel's short process name and the shell's directory when the foreground
+job's directory cannot be read; no protected arguments or elevated access are
+needed.
+
+User-initiated close checks query only the session's controlling TTY. Idle shells
+and orphaned background helper groups (including prompt workers) need no warning;
+foreground jobs and shell-controlled background/stopped jobs do. Window closing
+and Quit inspect every tab and show a single native confirmation. Automatic tab
+removal is deferred during that modal panel, and Cancel sends no termination
+signals. Natural shell exit does not prompt.
+The textured native window frame and unflipped tab buttons let the selected
+tab meet the title bar without a separator across its top edge.
+
+Switching between OpenGL pages temporarily exposes the Cocoa backing store on
+10.6. Hold screen updates until the window flush, attach/layout the incoming
+page, and draw its hardware surface before presenting the changed tab. Keep the
+flush disable/enable balanced even when selection raises an exception.
 
 AppKit may treat option values as startup documents when document types are
 declared. CLI handling suppresses only those initial callbacks; later file/URL
-requests still launch independent processes. Finder Services use the selected
+requests create independent sessions/windows in the running app. Finder Services use the selected
 directory, or a file's parent. Explicit application routing was tested; default
 handler selection is exposed as a user action rather than changed on install.
+
+The application owns native window controllers, shared menus and its Dock menu.
+Command-N and Dock New Window fork only a shell/PTY, never another frontend.
+Window cycling uses Command-grave and Command-Shift-grave. The app stays resident
+after its last window closes; Dock reopen creates a fresh window. CLI diagnostic
+flags and initial commands are confined to the initial session.
+
+## Terminal controls and secure input
+
+Font actions rebuild the active tab's CoreText faces and glyph cache, recalculate
+cell metrics and send the changed terminal geometry to its PTY. Reset Font Size
+uses the loaded configuration. Reload parses into a candidate first, then applies
+valid settings to every tab without replacing its terminal or session.
+
+Clear Scrollback temporarily disables then restores the core's history budget,
+which erases history while retaining the visible grid. Reset Terminal uses the
+core's reset API, reapplies the bundled palette and signals the foreground group
+with SIGWINCH so programs can redraw. Plain navigation keys use the core encoder;
+Shift with those keys moves the local viewport. Fn-arrow navigation also follows
+the logical Cocoa function key, instead of assuming the physical arrow code.
+
+Secure Keyboard Entry uses Carbon's EnableSecureEventInput/DisableSecureEventInput
+on the main thread. Keep our requested choice separate from our own enable count:
+IsSecureEventInputEnabled reports global state, including other applications.
+Release our count on terminal focus loss, app deactivation and termination.
+The native controls probe verifies API state and the checked menu through these
+transitions, as well as terminal resets, retained output and reload rollback.
+
+## Session startup geometry
+
+The former fixed 100×30 PTY size could be observed by a shell before AppKit
+finished laying out its tab. The first-command native regression reproduced
+100 columns in a 73-column tab. Each child now waits on a private local socket
+until the tab is attached, resized and its final TIOCSWINSZ has been applied.
+The view releases the child before shell execution. Cancelling an unattached
+session closes the gate and reaps the child. Both socket ends are close-on-exec;
+new children close inherited gates for other pending sessions.
+
+The renderer applies initial pixel metrics even if its row/column count matches
+the core's placeholder dimensions. Font metric changes also update PTY/core
+geometry when the character grid size happens to stay constant.
 
 ## Primary references
 

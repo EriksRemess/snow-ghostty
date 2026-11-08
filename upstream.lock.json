@@ -9,5 +9,22 @@
   "source_archive": "ghostty-vt-1.0.0-0fa3d577.tar.gz",
   "source_archive_sha256": "a315e13ecfbde6ee00ffdc66525bc95e6b9b5e25f54866d75eb69c6df7b8809b",
   "source_archive_api": "repos/ghostty-org/ghostty/tarball/0fa3d577a5614150ff8e2c152de5fb9d5c6d2dec",
-  "source_archive_url": "https://api.github.com/repos/ghostty-org/ghostty/tarball/0fa3d577a5614150ff8e2c152de5fb9d5c6d2dec"
+  "source_archive_url": "https://api.github.com/repos/ghostty-org/ghostty/tarball/0fa3d577a5614150ff8e2c152de5fb9d5c6d2dec",
+  "patches": [
+    {
+      "file": "patches/snow-leopard-tinyio.patch",
+      "sha256": "8a6f1cfbc1f7a3ba2514ff7749d520670c4a64c2d1b57793e5dd2176f620c16d"
+    },
+    {
+      "file": "patches/prompt-reflow.patch",
+      "sha256": "0860092d04b4c548c4fc16c7df679d2f300ca954f30c88bc80ffefcf6a8a1a87",
+      "source": "https://github.com/ghostty-org/ghostty/pull/14707",
+      "revision": "1fcc0ce28888878b2acb82fca986e9e4b75c1a2d"
+    },
+    {
+      "file": "patches/snow-ghostty-prompt-redraw.patch",
+      "sha256": "d3ca03c37232f89d537ddebe4ae65a23b8b4efd99a585c8fd9842b7b2016540c",
+      "purpose": "Use Ghostty terminal prompt-redraw policy in the Snow Ghostty C frontend"
+    }
+  ]
 }

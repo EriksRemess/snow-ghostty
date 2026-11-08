@@ -13,6 +13,69 @@ static void write_pty(GhosttyTerminal terminal, void *userdata, const uint8_t *d
     CHECK(length<=sizeof(reply)); memcpy(reply,data,length); reply_length=length;
 }
 
+static void vt_text(GhosttyTerminal terminal, const char *text)
+{
+    ghostty_terminal_vt_write(terminal,(const uint8_t *)text,strlen(text));
+}
+
+static void prompt(GhosttyTerminal terminal, uint16_t columns)
+{
+    vt_text(terminal,"\033]133;A\007\r\n\r\n\033[A~");
+    for (uint16_t x=1;x<columns;x++) vt_text(terminal,"─");
+    vt_text(terminal,"\r\n> \033]133;B\007");
+}
+
+static size_t occurrences(const uint8_t *text, size_t length, const char *needle)
+{
+    size_t count=0,n=strlen(needle);
+    for(size_t i=0;i+n<=length;i++) if(!memcmp(text+i,needle,n)) count++;
+    return count;
+}
+
+static void prompt_reflow(void)
+{
+    GhosttyTerminal terminal=NULL; GhosttyFormatter formatter=NULL;
+    CHECK(ghostty_terminal_new(NULL,&terminal,20,10)==GHOSTTY_SUCCESS);
+    CHECK(ghostty_formatter_terminal_new(NULL,&formatter,terminal)==GHOSTTY_SUCCESS);
+    vt_text(terminal,"keep output\r\n"); prompt(terminal,20);
+    const uint16_t widths[]={12,30,16,20};
+    for(int round=0;round<5;round++) for(size_t i=0;i<sizeof(widths)/sizeof(widths[0]);i++) {
+        CHECK(ghostty_terminal_resize(terminal,widths[i],10,7,17)==GHOSTTY_SUCCESS);
+        vt_text(terminal,"\r\033[A\033[A\033[J"); prompt(terminal,widths[i]);
+        uint8_t *text=NULL; size_t length=0; uint16_t y=0;
+        CHECK(ghostty_formatter_format_alloc(formatter,NULL,&text,&length)==GHOSTTY_SUCCESS);
+        CHECK(ghostty_terminal_get(terminal,GHOSTTY_TERMINAL_DATA_CURSOR_Y,&y)==GHOSTTY_SUCCESS);
+        if (occurrences(text,length,"~")!=1 || occurrences(text,length,"keep output")!=1 || y!=3) {
+            fprintf(stderr,"Prompt fixture contents: %.*s\n",(int)length,text);
+            fprintf(stderr,"Prompt reflow round %d width %u: rulers=%lu output=%lu cursor=%u\n",round,widths[i],
+                (unsigned long)occurrences(text,length,"~"),(unsigned long)occurrences(text,length,"keep output"),y);
+        }
+        CHECK(occurrences(text,length,"~")==1 && occurrences(text,length,"keep output")==1 && y==3);
+        ghostty_free(NULL,text,length);
+    }
+    for(int round=0;round<5;round++) {
+        CHECK(ghostty_terminal_resize(terminal,20,8,7,17)==GHOSTTY_SUCCESS);
+        CHECK(ghostty_terminal_resize(terminal,12,8,7,17)==GHOSTTY_SUCCESS);
+        vt_text(terminal,"\r\033[A\033[A\033[J"); prompt(terminal,12);
+        uint16_t y=0;CHECK(ghostty_terminal_get(terminal,GHOSTTY_TERMINAL_DATA_CURSOR_Y,&y)==GHOSTTY_SUCCESS);
+        fprintf(stderr,"Vertical then horizontal shrink %d: cursor=%u\n",round,y);CHECK(y==3);
+        CHECK(ghostty_terminal_resize(terminal,20,10,7,17)==GHOSTTY_SUCCESS);
+        vt_text(terminal,"\r\033[A\033[A\033[J");prompt(terminal,20);
+    }
+    for(int round=0;round<5;round++) {
+        for(int n=0;n<24;n++) {
+            uint16_t width=12+(n*7)%20,rows=8+(n*3)%12;
+            CHECK(ghostty_terminal_resize(terminal,width,rows,7,17)==GHOSTTY_SUCCESS);
+        }
+        CHECK(ghostty_terminal_resize(terminal,20,10,7,17)==GHOSTTY_SUCCESS);
+        vt_text(terminal,"\r\033[A\033[A\033[J"); prompt(terminal,20);
+        uint16_t y=0; CHECK(ghostty_terminal_get(terminal,GHOSTTY_TERMINAL_DATA_CURSOR_Y,&y)==GHOSTTY_SUCCESS);
+        fprintf(stderr,"Core resize burst %d: cursor=%u\n",round,y); CHECK(y==3);
+    }
+    ghostty_formatter_free(formatter); ghostty_terminal_free(terminal);
+    puts("Repeated full-width multiline prompt reflow preserves output without duplicate rows: PASS");
+}
+
 int main(void)
 {
     imac_core_init();
@@ -102,6 +165,7 @@ int main(void)
     ghostty_mouse_event_free(mouse_event); ghostty_mouse_encoder_free(mouse);
     ghostty_key_event_free(event); ghostty_key_encoder_free(encoder);
     ghostty_render_state_free(state); ghostty_terminal_free(terminal);
+    prompt_reflow();
     puts("libghostty-vt version / features / Unicode / resize / keys / replies / paste / mouse / style flags: PASS");
     return 0;
 }

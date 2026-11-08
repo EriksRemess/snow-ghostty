@@ -11,4 +11,7 @@ typedef struct {
 
 extern ImacConfig imac_config;
 BOOL imac_config_load(NSString *explicit_path);
+NSString *imac_config_path(void);
+NSString *imac_config_error(void);
+BOOL imac_config_reload(void);
 BOOL imac_register_fonts(void);

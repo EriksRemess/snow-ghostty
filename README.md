@@ -20,8 +20,8 @@
 ## About
 
 Snow Ghostty brings Ghostty's terminal engine to older Intel Macs with a native
-Cocoa interface, CoreText fonts, and an OpenGL 2.0 renderer. Each window runs an
-independent session; use tmux for panes and multiplexing.
+Cocoa interface, CoreText fonts, and an OpenGL 2.0 renderer. Windows and tabs run
+independent sessions; use tmux for panes and multiplexing.
 
 Requires Mac OS X 10.6 or later, an Intel Core 2 or newer, and accelerated
 OpenGL 2.0 / GLSL 1.20. Tested on Snow Leopard with a Radeon X1600.
