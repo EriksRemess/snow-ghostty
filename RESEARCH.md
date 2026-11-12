@@ -31,11 +31,11 @@ encoders, formatting, and terminal replies. It does not supply this frontend's
 window system, graphics backend, fonts, or PTY management. Full Ghostty's
 application stack is outside this port's scope.
 
-The current pin is official tag **vt-1.0.0**, commit
-`0fa3d577a5614150ff8e2c152de5fb9d5c6d2dec`. Its immutable archive SHA-256 is
-`a315e13ecfbde6ee00ffdc66525bc95e6b9b5e25f54866d75eb69c6df7b8809b`.
+The current pin is official tag **vt-1.0.1**, commit
+`108cacb17ed8990840cd14abfce43d8ed8503ca1`. Its immutable archive SHA-256 is
+`616c40b98bc94b0f2548d4599c3451bae6c4253d5a452fc47866f0c966bb75a8`.
 The manifest requires **Zig 0.17.0**. libghostty-vt is independently versioned
-**1.0.0**, with a stable C ABI; the upstream app's version is different.
+**1.0.1**, with a stable C ABI; the upstream app's version is different.
 The build explicitly sets the library version instead of inferring it from Git.
 
 The 1.0 migration uses fixed-layout style/selection structures, style flags,
@@ -69,14 +69,13 @@ directions. GNU patch may silently ignore --reverse; --forward prevents that
 from making an unpatched file appear patched. Local patch hashes are pinned in
 `upstream.lock.json`; patches apply with zero context fuzz.
 
-`patches/prompt-reflow.patch` backports [upstream PR #14707](https://github.com/ghostty-org/ghostty/pull/14707)
-at head `1fcc0ce28888878b2acb82fca986e9e4b75c1a2d`. The base remains libghostty-vt
-1.0.0. Redrawable OSC 133 prompt rows are copied as blanks during column reflow,
-before the shell replaces them, so full-width multiline prompts do not grow extra
-rows. The source screen remains intact if resizing fails. The patch includes
-upstream Screen/Terminal regressions; `vt-probe` also exercises twenty alternating
-width changes through the public C API while checking cursor position, prompt
-count and retained command output.
+libghostty-vt 1.0.1 includes [upstream PR #15199](https://github.com/ghostty-org/ghostty/pull/15199),
+which supersedes PR #14707. The local prompt-reflow backport has been removed.
+Upstream now tracks the prompt start before resizing, preserves its row count
+during reflow, and fixes prompt-start marks on split/joined rows. The source
+screen remains intact if resizing fails. `vt-probe` exercises alternating width
+changes, independent-axis shrinking and resize bursts through the public C API
+while checking cursor position, prompt count and retained command output.
 
 The C library normally disables prompt redraw, unlike Ghostty's terminal
 frontend. `patches/snow-ghostty-prompt-redraw.patch` keeps the core's enabled
@@ -86,6 +85,19 @@ opt-out and `redraw=last` behavior. Without this frontend policy, the upstream
 fix would remain inactive for ordinary Powerlevel10k prompt marks.
 
 ## Validation
+
+On 2026-11-12, app 0.3.1 with libghostty-vt 1.0.1 passed on the physical target:
+
+- GPU and public C API probes, including repeated prompt reflow, independent-axis
+  shrinking and resize bursts; rendering, selection and PTY/tmux integration.
+- Native tabs/About, terminal controls, configuration reload and startup geometry.
+- The configured Powerlevel10k prompt through normal startup, twenty resizes,
+  rapid resize bursts, independent-axis changes and narrow new-tab startup.
+- Windowed/fullscreen tab switching and all five shell-exit lifecycle modes.
+
+Actual GPU captures of the rendering fixture and resized prompts were inspected.
+Only the version header changed in the public C headers; the existing frontend
+API calls and Darwin runtime-symbol localization remain compatible.
 
 The 1.0.0 update passed on the physical target:
 
@@ -200,7 +212,7 @@ geometry when the character grid size happens to stay constant.
 ## Primary references
 
 - [Ghostty library documentation](https://ghostty.org/docs/libghostty)
-- [Release source and C headers](https://github.com/ghostty-org/ghostty/tree/vt-1.0.0)
-- [Pinned TinyIo](https://github.com/ghostty-org/ghostty/blob/0fa3d577a5614150ff8e2c152de5fb9d5c6d2dec/src/lib/TinyIo.zig)
-- [Pinned Darwin runtime override](https://github.com/ghostty-org/ghostty/blob/0fa3d577a5614150ff8e2c152de5fb9d5c6d2dec/src/build/libsystem_override.sh)
+- [Release source and C headers](https://github.com/ghostty-org/ghostty/tree/vt-1.0.1)
+- [Pinned TinyIo](https://github.com/ghostty-org/ghostty/blob/108cacb17ed8990840cd14abfce43d8ed8503ca1/src/lib/TinyIo.zig)
+- [Pinned Darwin runtime override](https://github.com/ghostty-org/ghostty/blob/108cacb17ed8990840cd14abfce43d8ed8503ca1/src/build/libsystem_override.sh)
 - [Apple Services implementation](https://developer.apple.com/library/archive/documentation/Cocoa/Conceptual/SysServices/Articles/providing.html)

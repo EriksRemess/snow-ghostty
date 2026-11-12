@@ -79,7 +79,7 @@ static void prompt_reflow(void)
 int main(void)
 {
     imac_core_init();
-    CHECK(strcmp(ghostty_version(), "1.0.0") == 0);
+    CHECK(strcmp(ghostty_version(), "1.0.1") == 0);
     printf("libghostty-vt version: %s (headers %s)\n",ghostty_version(),GHOSTTY_VT_VERSION);
     bool simd=true, kitty_graphics=true;
     CHECK(ghostty_build_info(GHOSTTY_BUILD_INFO_SIMD,&simd)==GHOSTTY_SUCCESS && !simd);

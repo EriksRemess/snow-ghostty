@@ -29,13 +29,14 @@ Alternatively pass `SDK` and `OSXCROSS_BIN` on the Make command line. `ZIG`,
 the terminal engine. The fetcher requires network access; it uses read-only
 GitHub API calls and verifies the immutable archive's SHA-256 before extraction.
 
-[upstream.lock.json](upstream.lock.json) pins the official `vt-1.0.0` tag's
+[upstream.lock.json](upstream.lock.json) pins the official `vt-1.0.1` tag's
 commit and compiler version. The upstream application version and libghostty-vt
-version are separate; the linked library is explicitly versioned **1.0.0**.
+version are separate; the linked library is explicitly versioned **1.0.1**.
 The build targets `x86_64-macos.10.6`, Core 2, ReleaseFast, scalar parsing, and
-disabled Kitty graphics. The local TinyIo compatibility and OSC 133 prompt-reflow
-backports are pinned with checksums in the same manifest and applied by the
-fetcher. The frontend uses the real 10.6 SDK and the stable OSXCross linker. Preserve **LC_UNIXTHREAD** and a 10.6 deployment target:
+disabled Kitty graphics. The local TinyIo compatibility and frontend prompt-redraw
+policy patches are pinned with checksums in the same manifest and applied by the
+fetcher. Prompt reflow comes from upstream 1.0.1. The frontend uses the real 10.6
+SDK and the stable OSXCross linker. Preserve **LC_UNIXTHREAD** and a 10.6 deployment target:
 a successful link with modern `ld64.lld` is not proof of Snow Leopard support.
 
 Outputs are under `build/`:

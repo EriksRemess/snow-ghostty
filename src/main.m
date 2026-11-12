@@ -26,7 +26,7 @@ int main(int argc,char **argv)
         else if (!strcmp(argv[i],"--ssh") && i+1<argc) { ssh_url=[NSString stringWithUTF8String:argv[++i]]; snow_app.keep_on_exit=YES; }
         else if (!strcmp(argv[i],"--make-default")) make_default=YES;
         else if (!strcmp(argv[i],"--version")) {
-            printf("Snow Ghostty 0.3.0 (libghostty-vt %s)\n",ghostty_version());
+            printf("Snow Ghostty 0.3.1 (libghostty-vt %s)\n",ghostty_version());
             [pool drain]; return 0;
         }
         else if (!strcmp(argv[i],"--help")) {

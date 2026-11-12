@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.1 — 2026-11-12
+
+- Update libghostty-vt to 1.0.1 and replace the local prompt-reflow backport
+  with upstream's fix for stale prompts and prompt markers during resizing.
+
 ## 0.3.0 — 2026-11-08
 
 - Add native tabs and multiple windows within one app, with automatic session

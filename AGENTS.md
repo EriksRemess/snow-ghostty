@@ -17,7 +17,7 @@ macOS compatibility. Follow any applicable workspace instructions as well.
 - Target the measured OpenGL 2.0 / GLSL 1.20 baseline. Preserve accelerated
   context selection, a bounded atlas, and integer cell placement.
 - Pin upstream source and Zig explicitly in `upstream.lock.json`. The current
-  core is libghostty-vt 1.0.0 with Zig 0.17.0. Its version is separate from the
+  core is libghostty-vt 1.0.1 with Zig 0.17.0. Its version is separate from the
   upstream application's version; preserve the library-version override.
 - Style and selection have fixed-layout structures. Do not initialize them
   with GHOSTTY_INIT_SIZED. Use the stable C API's style flags and formatters.
@@ -25,9 +25,10 @@ macOS compatibility. Follow any applicable workspace instructions as well.
   LC_UNIXTHREAD; a Linux build alone does not prove target compatibility.
 - Keep the TinyIo patch: the frontend owns PTY I/O and supplies secure random
   data, avoiding newer Darwin APIs. Keep upstream modifications in patches/.
-- Keep the prompt-reflow backport and C frontend prompt-redraw policy together.
-  The C library otherwise disables the behavior. Preserve OSC 133 redraw=0 and
-  redraw=last, and run the repeated-width public C API regression.
+- Prompt reflow is provided by upstream 1.0.1; do not restore the superseded
+  backport. Keep the C frontend prompt-redraw policy: the C library otherwise
+  disables the behavior. Preserve OSC 133 redraw=0 and redraw=last, and run
+  the repeated-width public C API regression.
 - Public source must not contain operator identities, target addresses,
   credentials, private logs, captures, SDKs, or workstation paths. Use ignored
   config.mk for machine-specific build paths. Keep generated source, dependency

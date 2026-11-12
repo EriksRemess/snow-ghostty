@@ -857,8 +857,8 @@ int main(int argc, char **argv)
     NSMutableString *text=[NSMutableString string]; collectText([about contentView],text);
     fprintf(stderr,"About text:\n%s\n",[text UTF8String]);
     verify_menu([text rangeOfString:@"Snow Ghostty"].location!=NSNotFound &&
-        [text rangeOfString:@"0.3.0"].location!=NSNotFound &&
-        [text rangeOfString:@"libghostty-vt 1.0.0"].location!=NSNotFound,"About displays app and linked-core versions");
+        [text rangeOfString:@"0.3.1"].location!=NSNotFound &&
+        [text rangeOfString:@"libghostty-vt 1.0.1"].location!=NSNotFound,"About displays app and linked-core versions");
     verify_menu(captureWindow(about,[NSString stringWithUTF8String:argv[1]]),"Captured native About panel");
     [delegate showAbout:nil]; pump(); verify_menu([NSApp keyWindow]==about,"Repeated About reuses native panel");
     [menu(@"File") update]; verify_menu(shortcut(@"w",13),"Command-W closes About"); pump();

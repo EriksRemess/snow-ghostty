@@ -43,5 +43,5 @@ See [compatibility notes](RESEARCH.md) for the Snow Leopard port.
 
 ## Status
 
-An early usable prototype, powered by **libghostty-vt 1.0.0**.
+An early usable prototype, powered by **libghostty-vt 1.0.1**.
 Known limitations are listed in [the documentation](USAGE.md#limitations).
